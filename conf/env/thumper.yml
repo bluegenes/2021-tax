@@ -1,0 +1,15 @@
+name: thumper
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.8
+  - mamba
+  - pandas>=1.2
+  - snakemake=6.5.0
+  - pytest
+  - sourmash>=4,<5
+  - pip
+  - pip:
+    - git+https://github.com/bluegenes/thumper@refactor-simplify
