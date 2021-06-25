@@ -51,9 +51,9 @@ rule write_sample_info:
     run:
         with open(str(output), "w") as outF:
             for inF in input:
-                sample_name = os.path.basename(inF).rsplit('.prodigal.faa')
+                sample_name = os.path.basename(inF).rsplit('.prodigal.faa')[0]
                 full_filename = os.path.abspath(str(inF))
-                outF.write(f'{sample_name},{full_filename}')
+                outF.write(f'{sample_name},{full_filename}\n')
 
 
 rule write_thumper_config:
@@ -77,6 +77,7 @@ rule write_thumper_config:
             for sd in search_databases:
                 out.write(f"  - {sd}\n")
             out.write(f"alphabet: {wildcards.alphabet}\n")
+            out.write(f"ksize:\n")
             for k in params.ksize:
                 out.write(f"  - {k}\n")
 
