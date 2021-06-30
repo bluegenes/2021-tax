@@ -16,11 +16,13 @@ logs_dir = os.path.join(out_dir, "logs")
 thumper_dir = os.path.join(out_dir, "thumper")
 basename = config.get('basename', 'tax-basename')
 database_dir = 'databases'
-search_databases = config.get('search_databases', ['gtdb-rs202-reps'])
+# how to incorporate db info??
+search_databases = config.get('search_databases', ['gtdb-rs202'])
 input_type = config.get('input_type', 'protein')
 alphabet = config.get('alphabet', 'protein')
 ksizes = config.get('ksizes', [7,8,9,10,11])
 sketch_type= "nucleotide" if alphabet in ['nucleotide','dna', 'rna' ] else "protein"
+threshold_bp = config.get('threshold_bp', '50000')
 # steps
 # 1. read sample csv
 # 2. prodigal fna --> faa
@@ -37,8 +39,9 @@ rule all:
         os.path.join(out_dir, "gtdbtk-classify", f"{basename}.nucl-gtdbtk.bac120.summary.tsv"),
         os.path.join(out_dir, "gtdbtk-classify", f"{basename}.nucl-gtdbtk.ar122.summary.tsv"),
         os.path.join(out_dir, "gtdbtk-classify", f"{basename}.gatktk_lineages.csv"),
-        classif_details = os.path.join(out_dir, 'reports', f'{basename}.{sketch_type}.classification-report.csv'),
-        classify_fsummaries = os.path.join(out_dir, 'reports', f'{basename}.{sketch_type}.classification-summaries.csv'),
+        expand(os.path.join(out_dir, 'reports', f'{basename}.{sketch_type}.{alphabet}-k{{ksize}}.classification-report.csv'),ksize=ksizes),
+        os.path.join(out_dir, 'reports', f'{basename}.{sketch_type}.classification-report.csv'),
+        os.path.join(out_dir, 'reports', f'{basename}.{sketch_type}.classification-summaries.csv'),
 
 rule prodigal_genomes:
     input: os.path.join(data_dir, "{accession}.fa")
@@ -95,6 +98,7 @@ rule write_thumper_config:
             out.write(f"basename: {basename}\n")
             out.write(f"sample_info: {input.sample_info}\n")
             out.write(f"database_dir: {database_dir}\n")
+            out.write(f"sourmash_database_threshold_bp: {threshold_bp}\n")
             out.write(f"search_databases:\n")
             for sd in search_databases:
                 out.write(f"  - {sd}\n")
@@ -169,7 +173,7 @@ rule gtdbtk_to_reference_lineage_csv:
     run:
         bac120 = pd.read_csv(str(input.bac120), sep = '\t')
         ar122 = pd.read_csv(str(input.ar122), sep = '\t')
-        bac120.append(ar122, ignore_index=True)
+        bac120 = bac120.append(ar122, ignore_index=True)
         bac120.rename(columns={'user_genome': 'genome', 'classification': 'lineage'}, inplace=True)
         bac120[['genome', 'lineage']].to_csv(str(output), index=False, sep=',')
 
@@ -184,7 +188,29 @@ rule write_reference_lineage_csv:
         ref_lineages.to_csv(str(output), index=False)
 
 
-rule assess_classification:
+rule assess_classification_each_ksize:
+    input:
+        ref_lin = os.path.join(out_dir, "gtdbtk-classify", f"{basename}.gatktk_lineages.csv"),
+        tax_csvs = os.path.join(thumper_dir, 'classify', f"{basename}.{sketch_type}.{alphabet}-k{{ksize}}.classifications.csv"),
+    output:
+        classif_details = os.path.join(out_dir, 'reports', f'{basename}.{sketch_type}.{alphabet}-k{{ksize}}.classification-report.csv'),
+        classify_fsummaries = os.path.join(out_dir, 'reports', f'{basename}.{sketch_type}.{alphabet}-k{{ksize}}.classification-summaries.csv')
+    log: os.path.join(logs_dir, "assess-classification", f"{basename}.{sketch_type}.{alphabet}-k{ksize}.log")
+    benchmark: os.path.join(logs_dir, "assess-classification", f"{basename}.{sketch_type}.{alphabet}-k{ksize}.benchmark")
+    #conda: "conf/env/thumper.yml"
+    conda: "sourmash-dev.yml"
+    shell:
+        """
+        python assess-classification.py --tax-genome {input.tax_csvs} \
+                                        --ref-annotations {input.ref_lin} \
+                                         --output-csv {output.classif_details} \
+                                         --report-csv {output.classify_fsummaries} \
+                                         --reference-type 'gtdbtk' \
+                                         2> {log}
+        """
+
+
+rule assess_classification_all:
     input:
         ref_lin = os.path.join(out_dir, "gtdbtk-classify", f"{basename}.gatktk_lineages.csv"),
         tax_csvs = expand(os.path.join(thumper_dir, 'classify', f"{basename}.{sketch_type}.{alphabet}-k{{ksize}}.classifications.csv"), ksize=ksizes)

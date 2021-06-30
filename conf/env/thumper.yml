@@ -9,7 +9,8 @@ dependencies:
   - pandas>=1.2
   - snakemake=6.5.0
   - pytest
-  - sourmash>=4,<5
+  #- sourmash>=4.1
   - pip
   - pip:
     - git+https://github.com/bluegenes/thumper@refactor-simplify
+    - git+https://github.com/sourmash-bio/sourmash@latest

@@ -9,7 +9,7 @@ import os
 import sys
 import csv
 import argparse
-from collections import namedtuple
+from collections import namedtuple, Counter
 
 import sourmash
 from sourmash.lca.lca_utils import (is_lineage_match, taxlist, make_lineage, display_lineage)
@@ -113,7 +113,10 @@ def main(args):
     all_exact    = 0
     all_higher   = 0
     all_missed   = 0
+    all_ref_missed   = 0
+    all_cl_missed   = 0
     all_checked  = 0
+    higher_counter = Counter()
 
     # check each tax classify csv
     for n, cl in enumerate(args.tax_genome):
@@ -128,33 +131,50 @@ def main(args):
         # process each classification result
         num_exact = 0
         num_higher = 0
-        num_missed = 0
+        ref_missed = 0
+        cl_missed = 0
         for m, classif in enumerate(cl_results):
             query = classif['query_name']
             smash_lin = make_lineage(classif['lineage'])
             # get query_lineage
-            ref_lin = refD.get(query, '')
+            ref_lin = refD.get(query, None)
             if not ref_lin:
                 if args.force:
                     notify(f'No reference lineage provided for query {query}. --force is set, skipping...')
                     match_type='no_ref'
                     match_rank='no_ref'
+                    if classif['rank'] == '':
+                        match_type='no_ref_or_classif'
+                        match_rank='no_ref_or_classif'
+                        cl_missed+=1
                     query_result = CompareClassification(query,match_type,match_rank,ref_lin,ref_type,smash_lin,classif["status"],classif['rank'],classif['fraction'],cl)
                     all_results.append(query_result)
-                    num_missed+=1
+                    ref_missed+=1
                     continue
                 else:
                     raise ValueError(f'ERROR: No reference lineage provided for query {query}.')
+           # handle empty gather results or nomatch
+            if classif['rank'] == '':
+                notify(f'No classification lineage provided for query {query}. --force is set, skipping...')
+                match_type='no_classif'
+                match_rank='no_classif'
+                query_result = CompareClassification(query,match_type,match_rank,ref_lin,ref_type,smash_lin,classif["status"],classif['rank'],classif['fraction'],cl)
+                all_results.append(query_result)
+                cl_missed+=1
+                continue
+
             match_type, match_rank = check_lineages(ref_lin, smash_lin, classif['rank'])
             if match_type == 'match':
                 num_exact +=1
             elif match_type == 'higher_rank':
                 num_higher +=1
+                higher_counter[match_rank] +=1
             #namedtuple("ClassificationResult", "query_name, status, rank, fraction, lineage, query_md5, query_filename")
             query_result = CompareClassification(query,match_type,match_rank,ref_lin,ref_type,smash_lin,classif["status"],classif['rank'],classif['fraction'],cl)
             all_results.append(query_result)
 
         # do some counting / assessment
+        num_missed = ref_missed + cl_missed
         num_checked = m - num_missed + 1 # +1 to make one-based???
         fraction_exact = float(num_exact)/num_checked
         fraction_higher = float(num_higher)/num_checked
@@ -168,6 +188,8 @@ def main(args):
         all_exact +=num_exact
         all_higher += num_higher
         all_missed +=num_missed
+        all_ref_missed +=ref_missed
+        all_cl_missed +=cl_missed
         all_checked +=num_checked
 
 
@@ -180,8 +202,10 @@ def main(args):
         for res in all_results:
             rD = res._asdict()
             rD['classification_fraction'] = f'{float(res.classification_fraction):.3f}'
-            rD['ref_lineage'] = display_lineage(res.ref_lineage)
-            rD['sourmash_lineage'] = display_lineage(res.sourmash_lineage)
+            if res.ref_lineage:
+                rD['ref_lineage'] = display_lineage(res.ref_lineage)
+            if res.sourmash_lineage:
+                rD['sourmash_lineage'] = display_lineage(res.sourmash_lineage)
             w.writerow(rD)
 
     ## aggregated reporting
@@ -189,12 +213,19 @@ def main(args):
     p_higher= (float(all_higher)/all_checked)*100
     p_anymatch = p_exact + p_higher
 
-    notify(f'Compared {all_checked} lineages to reference set.')
+    notify(f'Compared {all_checked} lineages to {args.reference_type} set.')
     if all_missed:
-        notify(f'Note: {all_missed} queries did not have a reference lineage provided and could not be compared.')
+        notify(f'Note: {all_missed} queries could not be compared.')
+        notify(f'Of these, {all_ref_missed} queries did not have a reference lineage; {all_cl_missed} queries did not have a classified lineage.')
     notify(f'\nTotal lineage matches: {p_anymatch:.2f}%')
     notify(f'\tExact Rank: {p_exact:.2f}%')
     notify(f'\tHigher Rank: {p_higher:.2f}%')
+    #for rank, count in higher_counter.most_common():
+    for rank in ascending_taxlist():
+        if rank in higher_counter.keys():
+            count = higher_counter[rank]
+            p_at_rank = float(count)/all_checked *100
+            notify(f'\t  {rank}: {p_at_rank:.2f}%')
 
     if args.report_csv:
         notify(f"saving per-file comparison report to {args.report_csv}")
@@ -216,7 +247,7 @@ def cmdline(sys_args):
     p.add_argument('--ref-annotations', required=True, nargs='+')
     p.add_argument('--output-csv', required=True)
     p.add_argument('--report-csv')
-    p.add_argument('--reference-type', default = 'Reference')
+    p.add_argument('--reference-type', default = 'reference')
     p.add_argument('--force', action='store_true')
     args = p.parse_args()
     return main(args)
