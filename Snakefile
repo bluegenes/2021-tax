@@ -195,8 +195,8 @@ rule assess_classification_each_ksize:
     output:
         classif_details = os.path.join(out_dir, 'reports', f'{basename}.{sketch_type}.{alphabet}-k{{ksize}}.classification-report.csv'),
         classify_fsummaries = os.path.join(out_dir, 'reports', f'{basename}.{sketch_type}.{alphabet}-k{{ksize}}.classification-summaries.csv')
-    log: os.path.join(logs_dir, "assess-classification", f"{basename}.{sketch_type}.{alphabet}-k{ksize}.log")
-    benchmark: os.path.join(logs_dir, "assess-classification", f"{basename}.{sketch_type}.{alphabet}-k{ksize}.benchmark")
+    log: os.path.join(logs_dir, "assess-classification", f"{basename}.{sketch_type}.{alphabet}-k{{ksize}}.log")
+    benchmark: os.path.join(logs_dir, "assess-classification", f"{basename}.{sketch_type}.{alphabet}-k{{ksize}}.benchmark")
     #conda: "conf/env/thumper.yml"
     conda: "sourmash-dev.yml"
     shell:
