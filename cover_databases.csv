@@ -1,0 +1,3 @@
+db_basename,alphabet,ksize,scaled,path,taxonomy_path
+gtdb-rs202-cover,protein,7,200,/home/ntpierce/2021-tax/test_dbsetcover/gtdb-rs202.protein-k7-scaled200.cover.zip,/group/ctbrowngrp/gtdb/gtdb-rs202.taxonomy.v2.csv
+gtdb-rs202-cover,protein,10,200,/home/ntpierce/2021-tax/test_dbsetcover/gtdb-rs202.protein-k10-scaled200.cover.zip,/group/ctbrowngrp/gtdb/gtdb-rs202.taxonomy.v2.csv
